@@ -101,9 +101,13 @@ def resection(
     # YOUR CODE HERE
 
 
-def convert_to_world_frame(translation_vector, rotation_matrix):
-    pass
-    # YOUR CODE HERE
+def convert_to_world_frame(translation_vector: np.ndarray, rotation_matrix: np.ndarray) -> typing.Tuple[
+    np.ndarray, np.ndarray]:
+    world_rotation_matrix = rotation_matrix.T
+
+    world_position = -world_rotation_matrix @ translation_vector
+
+    return world_position, world_rotation_matrix
 
 
 def visualisation(
