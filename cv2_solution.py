@@ -7,18 +7,38 @@ import yaml
 
 
 # Task 2
-def get_matches(image1, image2) -> typing.Tuple[
-    typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.DMatch]]:
+def filter_good_matches(matches: typing.Sequence[typing.Sequence[cv2.DMatch]], ratio: float) -> typing.List[cv2.DMatch]:
+    """Filter good matches using the k-ratio test."""
+    good_matches = []
+    for m, n in matches:
+        if m.distance < ratio * n.distance:
+            good_matches.append(m)
+    return good_matches
+
+
+def get_matches(image1, image2) -> typing.Tuple[typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.DMatch]]:
     sift = cv2.SIFT_create()
     img1_gray = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     img2_gray = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
     kp1, descriptors1 = sift.detectAndCompute(img1_gray, None)
     kp2, descriptors2 = sift.detectAndCompute(img2_gray, None)
 
     bf = cv2.BFMatcher()
-    matches_1_to_2: typing.Sequence[typing.Sequence[cv2.DMatch]] = bf.knnMatch(descriptors1, descriptors2, k=2)
+    matches_1_to_2 = bf.knnMatch(descriptors1, descriptors2, k=2)
+    matches_2_to_1 = bf.knnMatch(descriptors2, descriptors1, k=2)
 
-    # YOUR CODE HERE
+    k_ratio = 0.75
+    good_matches_1_to_2 = filter_good_matches(matches_1_to_2, k_ratio)
+    good_matches_2_to_1 = filter_good_matches(matches_2_to_1, k_ratio)
+
+    final_matches = [
+        match1 for match1 in good_matches_1_to_2
+        for match2 in good_matches_2_to_1
+        if match1.queryIdx == match2.trainIdx and match1.trainIdx == match2.queryIdx
+    ]
+
+    return kp1, kp2, final_matches
 
 
 def get_second_camera_position(kp1, kp2, matches, camera_matrix):
