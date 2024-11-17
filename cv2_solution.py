@@ -7,18 +7,38 @@ import yaml
 
 
 # Task 2
-def get_matches(image1, image2) -> typing.Tuple[
-    typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.DMatch]]:
+def filter_good_matches(matches: typing.Sequence[typing.Sequence[cv2.DMatch]], ratio: float) -> typing.List[cv2.DMatch]:
+    """Filter good matches using the k-ratio test."""
+    good_matches = []
+    for m, n in matches:
+        if m.distance < ratio * n.distance:
+            good_matches.append(m)
+    return good_matches
+
+
+def get_matches(image1, image2) -> typing.Tuple[typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.KeyPoint], typing.Sequence[cv2.DMatch]]:
     sift = cv2.SIFT_create()
     img1_gray = cv2.cvtColor(image1, cv2.COLOR_BGR2GRAY)
     img2_gray = cv2.cvtColor(image2, cv2.COLOR_BGR2GRAY)
+
     kp1, descriptors1 = sift.detectAndCompute(img1_gray, None)
     kp2, descriptors2 = sift.detectAndCompute(img2_gray, None)
 
     bf = cv2.BFMatcher()
-    matches_1_to_2: typing.Sequence[typing.Sequence[cv2.DMatch]] = bf.knnMatch(descriptors1, descriptors2, k=2)
+    matches_1_to_2 = bf.knnMatch(descriptors1, descriptors2, k=2)
+    matches_2_to_1 = bf.knnMatch(descriptors2, descriptors1, k=2)
 
-    # YOUR CODE HERE
+    k_ratio = 0.75
+    good_matches_1_to_2 = filter_good_matches(matches_1_to_2, k_ratio)
+    good_matches_2_to_1 = filter_good_matches(matches_2_to_1, k_ratio)
+
+    final_matches = [
+        match1 for match1 in good_matches_1_to_2
+        for match2 in good_matches_2_to_1
+        if match1.queryIdx == match2.trainIdx and match1.trainIdx == match2.queryIdx
+    ]
+
+    return kp1, kp2, final_matches
 
 
 def get_second_camera_position(kp1, kp2, matches, camera_matrix):
@@ -30,6 +50,7 @@ def get_second_camera_position(kp1, kp2, matches, camera_matrix):
 
 
 # Task 3
+# Task 3
 def triangulation(
         camera_matrix: np.ndarray,
         camera1_translation_vector: np.ndarray,
@@ -39,9 +60,33 @@ def triangulation(
         kp1: typing.Sequence[cv2.KeyPoint],
         kp2: typing.Sequence[cv2.KeyPoint],
         matches: typing.Sequence[cv2.DMatch]
-):
-    pass
-    # YOUR CODE HERE
+) -> np.ndarray:
+    projection_matrix_1 = np.hstack((camera1_rotation_matrix, camera1_translation_vector))
+    projection_matrix_1 = camera_matrix @ projection_matrix_1
+
+    projection_matrix_2 = np.hstack((camera2_rotation_matrix, camera2_translation_vector))
+    projection_matrix_2 = camera_matrix @ projection_matrix_2
+
+    points_3d = []
+ 
+    for match in matches:
+        pt1 = np.array([kp1[match.queryIdx].pt[0], kp1[match.queryIdx].pt[1], 1.0])
+        pt2 = np.array([kp2[match.trainIdx].pt[0], kp2[match.trainIdx].pt[1], 1.0])
+
+        A = np.array([
+            pt1[0] * projection_matrix_1[2, :] - projection_matrix_1[0, :],
+            pt1[1] * projection_matrix_1[2, :] - projection_matrix_1[1, :],
+            pt2[0] * projection_matrix_2[2, :] - projection_matrix_2[0, :],
+            pt2[1] * projection_matrix_2[2, :] - projection_matrix_2[1, :]
+        ])
+
+        _, _, Vt = np.linalg.svd(A)
+        X = Vt[-1]
+        X = X / X[3]
+
+        points_3d.append(X[:3]) 
+
+    return np.array(points_3d)
 
 
 # Task 4
@@ -56,9 +101,13 @@ def resection(
     # YOUR CODE HERE
 
 
-def convert_to_world_frame(translation_vector, rotation_matrix):
-    pass
-    # YOUR CODE HERE
+def convert_to_world_frame(translation_vector: np.ndarray, rotation_matrix: np.ndarray) -> typing.Tuple[
+    np.ndarray, np.ndarray]:
+    world_rotation_matrix = rotation_matrix.T
+
+    world_position = -world_rotation_matrix @ translation_vector
+
+    return world_position, world_rotation_matrix
 
 
 def visualisation(
