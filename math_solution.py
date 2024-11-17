@@ -1,5 +1,18 @@
 import numpy as np
 
+def rodrigues_rotation_matrix(rotation_vector):
+    theta = np.linalg.norm(rotation_vector)
+    if theta < 1e-6:
+        return np.eye(3)
+    k = rotation_vector / theta
+    K = np.array([
+        [0, -k[2], k[1]],
+        [k[2], 0, -k[0]],
+        [-k[1], k[0], 0]
+    ])
+    R = np.eye(3) + np.sin(theta) * K + (1 - np.cos(theta)) * np.dot(K, K)
+    return R
+
 
 def triangulation(
         camera_matrix: np.ndarray,
@@ -21,5 +34,24 @@ def triangulation(
     :return: triangulated points, np.ndarray Nx3
     """
 
-    pass
-    # YOUR CODE HERE
+    camera_position1 = -camera_rotation1.T @ camera_position1
+    camera_position2 = -camera_rotation2.T @ camera_position2
+
+    P1 = camera_matrix @ np.hstack((camera_rotation1.T, camera_position1.reshape(-1, 1)))
+    P2 = camera_matrix @ np.hstack((camera_rotation2.T, camera_position2.reshape(-1, 1)))
+
+    points_3d = []
+
+    for pt1, pt2 in zip(image_points1, image_points2):
+        A = np.array([
+            pt1[0] * P1[2] - P1[0],
+            pt1[1] * P1[2] - P1[1],
+            pt2[0] * P2[2] - P2[0],
+            pt2[1] * P2[2] - P2[1]
+        ])
+        _, _, Vt = np.linalg.svd(A)
+        X = Vt[-1]
+        X = X / X[3]
+        points_3d.append(X[:3])
+
+    return np.array(points_3d)
