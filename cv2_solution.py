@@ -50,6 +50,7 @@ def get_second_camera_position(kp1, kp2, matches, camera_matrix):
 
 
 # Task 3
+# Task 3
 def triangulation(
         camera_matrix: np.ndarray,
         camera1_translation_vector: np.ndarray,
@@ -59,9 +60,33 @@ def triangulation(
         kp1: typing.Sequence[cv2.KeyPoint],
         kp2: typing.Sequence[cv2.KeyPoint],
         matches: typing.Sequence[cv2.DMatch]
-):
-    pass
-    # YOUR CODE HERE
+) -> np.ndarray:
+    projection_matrix_1 = np.hstack((camera1_rotation_matrix, camera1_translation_vector))
+    projection_matrix_1 = camera_matrix @ projection_matrix_1
+
+    projection_matrix_2 = np.hstack((camera2_rotation_matrix, camera2_translation_vector))
+    projection_matrix_2 = camera_matrix @ projection_matrix_2
+
+    points_3d = []
+ 
+    for match in matches:
+        pt1 = np.array([kp1[match.queryIdx].pt[0], kp1[match.queryIdx].pt[1], 1.0])
+        pt2 = np.array([kp2[match.trainIdx].pt[0], kp2[match.trainIdx].pt[1], 1.0])
+
+        A = np.array([
+            pt1[0] * projection_matrix_1[2, :] - projection_matrix_1[0, :],
+            pt1[1] * projection_matrix_1[2, :] - projection_matrix_1[1, :],
+            pt2[0] * projection_matrix_2[2, :] - projection_matrix_2[0, :],
+            pt2[1] * projection_matrix_2[2, :] - projection_matrix_2[1, :]
+        ])
+
+        _, _, Vt = np.linalg.svd(A)
+        X = Vt[-1]
+        X = X / X[3]
+
+        points_3d.append(X[:3]) 
+
+    return np.array(points_3d)
 
 
 # Task 4
